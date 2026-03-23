@@ -286,7 +286,6 @@ Your response should consistently follow this rule whenever image-related analys
           imageCache.storeImage(`${req.id}_Image#${imgId}`, msg.source);
           msg.type = "text";
           delete msg.source;
-          msg.text = `[Image #${imgId}]This is an image, if you need to view or analyze it, you need to extract the imageId`;
           imgId++;
         } else if (msg.type === "text" && msg.text.includes("[Image #")) {
           msg.text = msg.text.replace(/\[Image #\d+\]/g, "");
@@ -299,7 +298,7 @@ Your response should consistently follow this rule whenever image-related analys
               `${req.id}_Image#${imgId}`,
               msg.content[0].source
             );
-            msg.content = `[Image #${imgId}]This is an image, if you need to view or analyze it, you need to extract the imageId`;
+            msg.content = `[Image ID: ${imgId}] (This is an image attachment. To see its content, use the 'analyzeImage' tool with imageId: ["${imgId}"])`;
             imgId++;
           }
         }

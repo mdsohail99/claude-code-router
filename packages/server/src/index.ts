@@ -258,29 +258,40 @@ async function getServer(options: RunOptions = {}) {
           const toolMessages: any[] = []
           const assistantMessages: any[] = []
           // Store Anthropic format message body, distinguishing text and tool types
-          let isFirstTextChunk = true;
+          let notificationSent = false;
+          req.log.info({ scenarioType: req.scenarioType, model: req.body.model }, "Streaming response start");
+
           return done(null, rewriteStream(eventStream, async (data, controller: any) => {
             try {
-              // Inject model switching notification into the first text chunk
-              if (isFirstTextChunk && data.event === 'content_block_delta' && data.data?.delta?.type === 'text_delta') {
-                if (req.scenarioType && req.scenarioType !== 'default') {
-                  const scenarioName = req.scenarioType.toUpperCase();
-                  const notification = `[CCR] 🤖 Switching to ${scenarioName} Model: ${req.body.model}\n\n`;
-                  controller.enqueue({
-                    event: 'content_block_delta',
-                    data: {
-                      ...data.data,
-                      delta: {
-                        ...data.data.delta,
-                        text: notification + data.data.delta.text
-                      }
-                    }
-                  });
-                  isFirstTextChunk = false;
-                  return undefined;
-                }
-                isFirstTextChunk = false;
+              // Inject model switching notification at the very beginning of the stream
+              if (!notificationSent && req.scenarioType && req.scenarioType !== 'default') {
+                const scenarioName = req.scenarioType.toUpperCase();
+                const notification = `[CCR] 🤖 Switching to ${scenarioName} Model: ${req.body.model}\n\n`;
+                
+                // Inject as a separate content block at the start
+                controller.enqueue({
+                  event: 'content_block_start',
+                  data: {
+                    index: 999, // Use a high index to not conflict with model's blocks
+                    content_block: { type: 'text', text: '' }
+                  }
+                });
+                controller.enqueue({
+                  event: 'content_block_delta',
+                  data: {
+                    index: 999,
+                    delta: { type: 'text_delta', text: notification }
+                  }
+                });
+                controller.enqueue({
+                  event: 'content_block_stop',
+                  data: { index: 999 }
+                });
+                
+                notificationSent = true;
               }
+
+              // Normal event processing
 
               // Detect tool call start
               if (data.event === 'content_block_start' && data?.data?.content_block?.name) {
