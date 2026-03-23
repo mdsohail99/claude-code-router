@@ -264,8 +264,13 @@ async function getServer(options: RunOptions = {}) {
           return done(null, rewriteStream(eventStream, async (data, controller: any) => {
             try {
               // Inject model switching notification at the very beginning of the stream
-              if (!notificationSent && req.scenarioType && req.scenarioType !== 'default') {
-                const scenarioName = req.scenarioType.toUpperCase();
+              let effectiveScenario = req.scenarioType;
+              if (effectiveScenario === 'default' && req.agents?.includes('image')) {
+                effectiveScenario = 'image';
+              }
+
+              if (!notificationSent && effectiveScenario && effectiveScenario !== 'default') {
+                const scenarioName = effectiveScenario.toUpperCase();
                 const notification = `[CCR] 🤖 Switching to ${scenarioName} Model: ${req.body.model}\n\n`;
                 
                 // Inject as a separate content block at the start

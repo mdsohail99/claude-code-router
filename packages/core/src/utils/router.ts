@@ -159,7 +159,7 @@ const getUseModel = async (
   // 2. Image Task Detection (Smart Classifier)
   const lastMessage = req.body.messages?.[req.body.messages.length - 1];
   const hasImage = lastMessage?.role === 'user' && Array.isArray(lastMessage.content) && 
-                 lastMessage.content.some((item: any) => item.type === 'image' || (item.type === "text" && item.text?.includes("[Image #")));
+                 lastMessage.content.some((item: any) => item.type === 'image' || (item.type === "text" && (item.text?.includes("[Image #") || item.text?.includes("[Image ID:"))));
   if (hasImage && Router?.image) {
     req.log.info(`Smart Classifier: Detected image task. Switching to ${Router.image}`);
     return { model: Router.image, scenarioType: 'image' };
