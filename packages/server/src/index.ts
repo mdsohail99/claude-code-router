@@ -258,8 +258,30 @@ async function getServer(options: RunOptions = {}) {
           const toolMessages: any[] = []
           const assistantMessages: any[] = []
           // Store Anthropic format message body, distinguishing text and tool types
-          return done(null, rewriteStream(eventStream, async (data, controller) => {
+          let isFirstTextChunk = true;
+          return done(null, rewriteStream(eventStream, async (data, controller: any) => {
             try {
+              // Inject model switching notification into the first text chunk
+              if (isFirstTextChunk && data.event === 'content_block_delta' && data.data?.delta?.type === 'text_delta') {
+                if (req.scenarioType && req.scenarioType !== 'default') {
+                  const scenarioName = req.scenarioType.toUpperCase();
+                  const notification = `[CCR] 🤖 Switching to ${scenarioName} Model: ${req.body.model}\n\n`;
+                  controller.enqueue({
+                    event: 'content_block_delta',
+                    data: {
+                      ...data.data,
+                      delta: {
+                        ...data.data.delta,
+                        text: notification + data.data.delta.text
+                      }
+                    }
+                  });
+                  isFirstTextChunk = false;
+                  return undefined;
+                }
+                isFirstTextChunk = false;
+              }
+
               // Detect tool call start
               if (data.event === 'content_block_start' && data?.data?.content_block?.name) {
                 const agent = req.agents.find((name: string) => agentsManager.getAgent(name)?.tools.get(data.data.content_block.name))

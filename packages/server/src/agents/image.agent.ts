@@ -70,7 +70,9 @@ export class ImageAgent implements IAgent {
             item.content.some((sub: any) => sub.type === "image"))
       )
     ) {
+      req.log.info(`ImageAgent: Detected direct image in message. Mapping to ${config.Router.image}`);
       req.body.model = config.Router.image;
+      req.scenarioType = 'image';
       const images: any[] = [];
       lastMessage.content
         .filter((item: any) => item.type === "tool_result")
@@ -87,7 +89,7 @@ export class ImageAgent implements IAgent {
       lastMessage.content.push(...images);
       return false;
     }
-    return req.body.messages.some(
+    const hasImage = req.body.messages.some(
       (msg: any) =>
         msg.role === "user" &&
         Array.isArray(msg.content) &&
@@ -98,6 +100,11 @@ export class ImageAgent implements IAgent {
               item.content.some((sub: any) => sub.type === "image"))
         )
     );
+    if (hasImage) {
+      req.scenarioType = 'image';
+      return true;
+    }
+    return false;
   }
 
   appendTools() {
