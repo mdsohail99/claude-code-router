@@ -145,6 +145,26 @@ const getUseModel = async (
     return { model: req.body.model, scenarioType: 'default' };
   }
 
+  // 1. Code Task Detection (Smart Classifier)
+  const codingTools = ["str_replace_editor", "bash", "read_file", "ls", "glob", "grep_search"];
+  if (
+    Array.isArray(req.body.tools) &&
+    req.body.tools.some((tool: any) => codingTools.includes(tool.name)) &&
+    Router?.code
+  ) {
+    req.log.info(`Smart Classifier: Detected coding task. Switching to ${Router.code}`);
+    return { model: Router.code, scenarioType: 'code' };
+  }
+
+  // 2. Image Task Detection (Smart Classifier)
+  const lastMessage = req.body.messages?.[req.body.messages.length - 1];
+  const hasImage = lastMessage?.role === 'user' && Array.isArray(lastMessage.content) && 
+                 lastMessage.content.some((item: any) => item.type === 'image' || (item.type === "text" && item.text?.includes("[Image #")));
+  if (hasImage && Router?.image) {
+    req.log.info(`Smart Classifier: Detected image task. Switching to ${Router.image}`);
+    return { model: Router.image, scenarioType: 'image' };
+  }
+
   // if tokenCount is greater than the configured threshold, use the long context model
   const longContextThreshold = Router?.longContextThreshold || 60000;
   const lastUsageThreshold =
@@ -205,7 +225,7 @@ export interface RouterContext {
   event?: any;
 }
 
-export type RouterScenarioType = 'default' | 'background' | 'think' | 'longContext' | 'webSearch';
+export type RouterScenarioType = 'default' | 'background' | 'think' | 'longContext' | 'webSearch' | 'code' | 'image';
 
 export interface RouterFallbackConfig {
   default?: string[];
@@ -213,6 +233,8 @@ export interface RouterFallbackConfig {
   think?: string[];
   longContext?: string[];
   webSearch?: string[];
+  code?: string[];
+  image?: string[];
 }
 
 export const router = async (req: any, _res: any, context: RouterContext) => {

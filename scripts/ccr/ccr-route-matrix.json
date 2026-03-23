@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "updated": "2026-03-23",
+  "models": {
+    "openrouter,stepfun/step-3.5-flash:free": {
+      "label": "Step 3.5 Flash",
+      "specialties": ["default", "background", "webSearch"],
+      "notes": "Fast, low-friction default/background fallback for current CCR setup."
+    },
+    "openrouter,google/gemma-3-27b-it:free": {
+      "label": "Gemma 3 27B",
+      "specialties": ["default", "longContext", "webSearch", "code"],
+      "notes": "Stable general model with strong context and good free-tier practicality."
+    },
+    "openrouter,nvidia/nemotron-3-super-120b-a12b:free": {
+      "label": "Nemotron 3 Super",
+      "specialties": ["default", "think", "code"],
+      "notes": "Best raw general-purpose model when free-tier quota is available."
+    },
+    "openrouter,arcee-ai/trinity-large-preview:free": {
+      "label": "Trinity Large Preview",
+      "specialties": ["think", "longContext", "default"],
+      "notes": "Good reasoning lane and a useful fallback for heavier analysis."
+    },
+    "openrouter,arcee-ai/trinity-mini:free": {
+      "label": "Trinity Mini",
+      "specialties": ["background"],
+      "notes": "Lightweight background fallback."
+    },
+    "openrouter,google/gemma-3-4b-it:free": {
+      "label": "Gemma 3 4B",
+      "specialties": ["background"],
+      "notes": "Small, general fallback for lighter CCR background traffic."
+    },
+    "openrouter,minimax/minimax-m2.5:free": {
+      "label": "MiniMax M2.5",
+      "specialties": ["code", "think"],
+      "notes": "Primary coding model and a strong heavier-reasoning fallback."
+    },
+    "openrouter,qwen/qwen3-coder:free": {
+      "label": "Qwen3 Coder",
+      "specialties": ["code"],
+      "notes": "High-upside coding fallback when provider capacity allows."
+    },
+    "openrouter,nvidia/nemotron-nano-12b-v2-vl:free": {
+      "label": "Nemotron Nano 12B VL",
+      "specialties": ["image"],
+      "notes": "Primary multimodal/image route."
+    },
+    "openrouter,openrouter/free": {
+      "label": "OpenRouter Free",
+      "specialties": ["default", "background", "think", "longContext", "webSearch", "code", "image"],
+      "notes": "All-in-one free-tier alias. Routes to any available free model on OpenRouter. Good fallback before auto."
+    },
+    "openrouter,openrouter/auto": {
+      "label": "OpenRouter Auto",
+      "specialties": ["default", "background", "think", "longContext", "webSearch", "code", "image"],
+      "notes": "Last-resort router fallback when explicit preferences are limited."
+    }
+  },
+  "roles": {
+    "default": [
+      "openrouter,stepfun/step-3.5-flash:free",
+      "openrouter,google/gemma-3-27b-it:free",
+      "openrouter,nvidia/nemotron-3-super-120b-a12b:free",
+      "openrouter,arcee-ai/trinity-large-preview:free",
+      "openrouter,openrouter/free",
+      "openrouter,openrouter/auto"
+    ],
+    "background": [
+      "openrouter,stepfun/step-3.5-flash:free",
+      "openrouter,google/gemma-3-4b-it:free",
+      "openrouter,arcee-ai/trinity-mini:free",
+      "openrouter,openrouter/free",
+      "openrouter,openrouter/auto"
+    ],
+    "think": [
+      "openrouter,arcee-ai/trinity-large-preview:free",
+      "openrouter,google/gemma-3-27b-it:free",
+      "openrouter,minimax/minimax-m2.5:free",
+      "openrouter,nvidia/nemotron-3-super-120b-a12b:free",
+      "openrouter,openrouter/free",
+      "openrouter,openrouter/auto"
+    ],
+    "longContext": [
+      "openrouter,google/gemma-3-27b-it:free",
+      "openrouter,arcee-ai/trinity-large-preview:free",
+      "openrouter,nvidia/nemotron-3-super-120b-a12b:free",
+      "openrouter,minimax/minimax-m2.5:free",
+      "openrouter,openrouter/free",
+      "openrouter,openrouter/auto"
+    ],
+    "webSearch": [
+      "openrouter,google/gemma-3-27b-it:free",
+      "openrouter,stepfun/step-3.5-flash:free",
+      "openrouter,arcee-ai/trinity-large-preview:free",
+      "openrouter,openrouter/free",
+      "openrouter,openrouter/auto"
+    ],
+    "image": [
+      "openrouter,nvidia/nemotron-nano-12b-v2-vl:free",
+      "openrouter,openrouter/free",
+      "openrouter,openrouter/auto"
+    ],
+    "code": [
+      "openrouter,minimax/minimax-m2.5:free",
+      "openrouter,nvidia/nemotron-3-super-120b-a12b:free",
+      "openrouter,google/gemma-3-27b-it:free",
+      "openrouter,qwen/qwen3-coder:free",
+      "openrouter,openrouter/free",
+      "openrouter,openrouter/auto"
+    ]
+  }
+}

@@ -11,9 +11,10 @@ export const createEnvVariables = async (): Promise<Record<string, string | unde
 
   return {
     ANTHROPIC_AUTH_TOKEN: apiKey,
-    ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}`,
+    CLAUDE_CODE_ATTRIBUTION_HEADER: "0",
+    DISABLE_TELEMETRY: "1",
+    ANTHROPIC_BASE_URL: `http://127.0.0.1:${config.PORT || 3456}`,
     NO_PROXY: "127.0.0.1",
-    DISABLE_TELEMETRY: "true",
     DISABLE_COST_WARNINGS: "true",
     API_TIMEOUT_MS: String(config.API_TIMEOUT_MS ?? 600000),
     // Reset CLAUDE_CODE_USE_BEDROCK when running with ccr

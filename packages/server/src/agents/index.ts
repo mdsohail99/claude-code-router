@@ -1,4 +1,5 @@
 import { imageAgent } from './image.agent'
+import { codeAgent } from './code.agent'
 import { IAgent } from './type';
 
 export class AgentsManager {
@@ -45,4 +46,5 @@ export class AgentsManager {
 
 const agentsManager = new AgentsManager()
 agentsManager.registerAgent(imageAgent)
+agentsManager.registerAgent(codeAgent)
 export default agentsManager

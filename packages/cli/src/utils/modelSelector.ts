@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import JSON5 from 'json5';
 import { select, input, confirm } from '@inquirer/prompts';
 
 // ANSI color codes
@@ -80,7 +81,7 @@ function getConfigPath(): string {
 
 function loadConfig(): Config {
   const configPath = getConfigPath();
-  return JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  return JSON5.parse(fs.readFileSync(configPath, 'utf-8'));
 }
 
 function saveConfig(config: Config): void {
@@ -90,7 +91,9 @@ function saveConfig(config: Config): void {
 }
 
 function getAllModels(config: Config) {
-  const models: any[] = [];
+  const models: any[] = [
+    { name: `${DIM}← Back${RESET}`, value: '__back__' }
+  ];
   for (const provider of config.Providers) {
     for (const model of provider.models) {
       models.push({
@@ -155,14 +158,18 @@ async function selectModelType() {
   return await select({
     message: `${BOLDYELLOW}Which model configuration do you want to update?${RESET}`,
     choices: [
+      { name: `${DIM}← Exit${RESET}`, value: 'exit' },
       { name: 'Default Model', value: 'default' },
       { name: 'Background Model', value: 'background' },
       { name: 'Think Model', value: 'think' },
       { name: 'Long Context Model', value: 'longContext' },
       { name: 'Web Search Model', value: 'webSearch' },
       { name: 'Image Model', value: 'image' },
-      { name: `${BOLDGREEN}+ Add New Model${RESET}`, value: 'addModel' }
-    ]
+      { name: `${BOLDGREEN}+ Add New Model${RESET}`, value: 'addModel' },
+      { name: `${BOLDYELLOW}🚀 Apply changes & Restart Service${RESET}`, value: 'restart' }
+    ],
+    // @ts-ignore
+    loop: false
   });
 }
 
@@ -172,7 +179,9 @@ async function selectModel(config: Config, modelType: string) {
   return await select({
     message: `\n${BOLDYELLOW}Select a model for ${modelType}:${RESET}`,
     choices: models,
-    pageSize: 15
+    pageSize: 25,
+    // @ts-ignore - loop exists in runtime for @inquirer/prompts v5+
+    loop: false
   });
 }
 
@@ -429,34 +438,89 @@ async function addNewProvider(config: Config): Promise<ModelResult | null> {
 }
 
 export async function runModelSelector(): Promise<void> {
-  console.clear();
-  
-  try {
-    let config = loadConfig();
-    displayCurrentConfig(config);
-    
-    const action = await selectModelType() as string;
-    
-    if (action === 'addModel') {
-      const result = await addNewModel(config);
-      
-      if (result) {
-        config = loadConfig();
-        config.Router[result.modelType] = `${result.providerName},${result.modelName}`;
-        saveConfig(config);
-        console.log(`${GREEN}✓ ${result.modelType} set to ${result.providerName},${result.modelName}${RESET}`);
+  let finished = false;
+
+  while (!finished) {
+    console.clear();
+    try {
+      let config = loadConfig();
+      displayCurrentConfig(config);
+
+      const action = await selectModelType() as string;
+
+      if (action === 'exit') {
+        finished = true;
+        break;
       }
-    } else {
-      const selectedModel = await selectModel(config, action) as string;
-      config.Router[action] = selectedModel;
-      saveConfig(config);
-      
-      console.log(`${GREEN}✓ ${action} model updated to: ${selectedModel}${RESET}`);
+
+      if (action === 'restart') {
+        // Sync Default Model with Claude settings
+        try {
+          const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+          const settingsPath = path.join(homeDir, '.claude', 'settings.json');
+          if (fs.existsSync(settingsPath)) {
+            const settings = JSON5.parse(fs.readFileSync(settingsPath, 'utf-8'));
+            if (settings.model !== config.Router.default) {
+              console.log(`${DIM}Syncing default model with Claude settings...${RESET}`);
+              settings.model = config.Router.default;
+              fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+              console.log(`${GREEN}✓ Claude settings updated${RESET}`);
+            }
+          }
+        } catch (e) {
+          console.warn(`${YELLOW}⚠ Could not sync with Claude settings: ${RESET}`, e instanceof Error ? e.message : e);
+        }
+
+        try {
+          const { restartService } = require('./index');
+          await restartService();
+          finished = true;
+          break;
+        } catch (e) {
+          console.warn(`${YELLOW}⚠ Could not restart service automatically. Please run 'ccr restart' manually.${RESET}`);
+          finished = true;
+          break;
+        }
+      }
+
+      try {
+        if (action === 'addModel') {
+          const result = await addNewModel(config);
+
+          if (result) {
+            config = loadConfig();
+            config.Router[result.modelType] = `${result.providerName},${result.modelName}`;
+            saveConfig(config);
+            console.log(`${GREEN}✓ ${result.modelType} set to ${result.providerName},${result.modelName}${RESET}`);
+          }
+        } else {
+          const selectedModel = await selectModel(config, action) as string;
+          if (selectedModel === '__back__') {
+            continue;
+          }
+          config.Router[action] = selectedModel;
+          saveConfig(config);
+
+          console.log(`${GREEN}✓ ${action} model updated to: ${selectedModel}${RESET}`);
+        }
+      } catch (e: any) {
+        // Handle ESC/Ctrl+C — return to main menu
+        continue;
+      }
+
+    } catch (error: any) {
+      const msg = error?.message || '';
+      if (
+        msg.includes('force closed') ||
+        msg.includes('ExitPromptError') ||
+        msg.includes('canceled') ||
+        error?.name === 'ExitPromptError'
+      ) {
+        finished = true;
+        break;
+      }
+      console.error(`${YELLOW}Error:${RESET}`, msg);
+      process.exit(1);
     }
-    
-    displayCurrentConfig(config);
-  } catch (error: any) {
-    console.error(`${YELLOW}Error:${RESET}`, error.message);
-    process.exit(1);
   }
 }
