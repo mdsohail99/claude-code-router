@@ -87,7 +87,7 @@ export class ImageAgent implements IAgent {
           }
         });
       lastMessage.content.push(...images);
-      return false;
+      return true;
     }
     const hasImage = req.body.messages.some(
       (msg: any) =>
