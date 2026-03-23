@@ -123,6 +123,11 @@ function displayCurrentConfig(config: Config): void {
   
   console.log(`${BOLDCYAN}Default Model:${RESET}`);
   console.log(`  ${formatModel(config.Router.default)}\n`);
+
+  if (config.Router.code) {
+    console.log(`${BOLDCYAN}Coding Model (Auto-Detected):${RESET}`);
+    console.log(`  ${formatModel(config.Router.code)}\n`);
+  }
   
   if (config.Router.background) {
     console.log(`${BOLDCYAN}Background Model:${RESET}`);
@@ -160,6 +165,7 @@ async function selectModelType() {
     choices: [
       { name: `${DIM}← Exit${RESET}`, value: 'exit' },
       { name: 'Default Model', value: 'default' },
+      { name: 'Coding Model (Auto-Detected)', value: 'code' },
       { name: 'Background Model', value: 'background' },
       { name: 'Think Model', value: 'think' },
       { name: 'Long Context Model', value: 'longContext' },
