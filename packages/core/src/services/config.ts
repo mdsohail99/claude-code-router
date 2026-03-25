@@ -40,6 +40,7 @@ export class ConfigService {
   private loadConfig(): void {
     if (this.options.useJsonFile && this.options.jsonPath) {
       this.loadJsonConfig();
+      this.loadMatrixConfig();
     }
 
     if (this.options.initialConfig) {
@@ -80,6 +81,24 @@ export class ConfigService {
       }
     } else {
       console.warn(`JSON config file not found: ${jsonPath}`);
+    }
+  }
+
+  private loadMatrixConfig(): void {
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+    const matrixPath = join(homeDir, '.claude-code-router', 'ccr-route-matrix.json');
+
+    if (existsSync(matrixPath)) {
+      try {
+        const jsonContent = readFileSync(matrixPath, "utf-8");
+        const matrixConfig = JSON5.parse(jsonContent);
+        if (matrixConfig && matrixConfig.roles) {
+          this.config.fallback = { ...this.config.fallback, ...matrixConfig.roles };
+          console.log(`Loaded Matrix fallback config from: ${matrixPath}`);
+        }
+      } catch (error) {
+        console.warn(`Failed to load Matrix config from ${matrixPath}:`, error);
+      }
     }
   }
 

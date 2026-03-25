@@ -313,6 +313,16 @@ export const router = async (req: any, _res: any, context: RouterContext) => {
     }
     req.body.model = model;
 
+    // OpenRouter mandatory reasoning enforcement for strict models
+    const strictReasoningModels = [
+      "minimax/minimax-m2.5",
+      "stepfun/step-3.5-flash",
+      "liquid/lfm-2.5-1.2b-thinking"
+    ];
+    if (model.startsWith("openrouter") && strictReasoningModels.some(m => model.includes(m))) {
+      req.body.include_reasoning = true;
+    }
+
     // Log router event for observability
     logRouterEvent({
       sessionId: req.sessionId,

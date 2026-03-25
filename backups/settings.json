@@ -1,0 +1,15 @@
+{
+  "enabledPlugins": {
+    "superpowers@superpowers-dev": true
+  },
+  "extraKnownMarketplaces": {
+    "superpowers-dev": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/obra/superpowers.git"
+      }
+    }
+  },
+  "autoUpdatesChannel": "latest",
+  "model": "openrouter,minimax/minimax-m2.5:free"
+}
