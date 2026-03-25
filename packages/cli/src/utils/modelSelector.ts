@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { select, input, confirm } from '@inquirer/prompts';
+import JSON5 from 'json5';
 
 // ANSI color codes
 const RESET = "\x1B[0m";
@@ -87,6 +88,23 @@ function saveConfig(config: Config): void {
   const configPath = getConfigPath();
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
   console.log(`${GREEN}✓ config.json updated successfully${RESET}\n`);
+}
+
+function syncClaudeSettings(modelId: string): void {
+  const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+  const settingsPath = path.join(homeDir, '.claude', 'settings.json');
+  
+  if (fs.existsSync(settingsPath)) {
+    try {
+      const content = fs.readFileSync(settingsPath, 'utf-8');
+      const settings = JSON5.parse(content);
+      settings.model = modelId;
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+      console.log(`${GREEN}✓ Claude settings.json updated to: ${modelId}${RESET}`);
+    } catch (error: any) {
+      console.warn(`${YELLOW}⚠ Could not sync with Claude settings: ${error.message}${RESET}`);
+    }
+  }
 }
 
 function getAllModels(config: Config) {
@@ -455,6 +473,11 @@ export async function runModelSelector(): Promise<void> {
           config = loadConfig();
           config.Router[result.modelType] = `${result.providerName},${result.modelName}`;
           saveConfig(config);
+          
+          if (result.modelType === 'default') {
+            syncClaudeSettings(`${result.providerName},${result.modelName}`);
+          }
+          
           console.log(`${GREEN}✓ ${result.modelType} set to ${result.providerName},${result.modelName}${RESET}`);
           displayCurrentConfig(loadConfig());
           break;
@@ -473,6 +496,11 @@ export async function runModelSelector(): Promise<void> {
         
         config.Router[action] = selectedModel;
         saveConfig(config);
+        
+        if (action === 'default') {
+          syncClaudeSettings(selectedModel);
+        }
+        
         console.log(`${GREEN}✓ ${action} model updated to: ${selectedModel}${RESET}`);
         displayCurrentConfig(loadConfig());
         break;
