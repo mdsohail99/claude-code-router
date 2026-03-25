@@ -132,6 +132,17 @@ const getUseModel = async (
   const providers = configService.get<any[]>("providers") || [];
   const Router = projectSpecificRouter || configService.get("Router");
 
+  // ✅ MUST come first — explicit "provider,model" overrides skip all scenario routing.
+  // Moving this lower would let haiku/webSearch/code checks hijack manual selections.
+  if (req.body.model?.includes(",")) {
+    const [provider, model] = req.body.model.split(",");
+    const finalProvider = providers.find((p: any) => p.name.toLowerCase() === provider);
+    const finalModel = finalProvider?.models?.find((m: any) => m.toLowerCase() === model);
+    if (finalProvider && finalModel) {
+      return { model: `${finalProvider.name},${finalModel}`, scenarioType: 'default' };
+    }
+    return { model: req.body.model, scenarioType: 'default' };
+  }
 
   // if tokenCount is greater than the configured threshold, use the long context model
   const longContextThreshold = Router?.longContextThreshold || 60000;
@@ -206,29 +217,7 @@ const getUseModel = async (
       return { model: Router.code, scenarioType: 'code' };
     }
   }
-  const incomingModel = req.body.model || '';
-  // If the model is a generic Claude 3.5/3.7 Sonnet, use the Router default.
-  // This allows CCR to handle the "intelligent" mapping for the standard Claude Code experience.
-  if (!incomingModel || incomingModel === 'claude-3-5-sonnet-20241022' || incomingModel === 'claude-3-7-sonnet-20250219') {
-    return { model: Router?.default, scenarioType: 'default' };
-  }
-
-  // If the model contains a comma (like "openrouter,model-name"), it's a manual override.
-  // We let these pass through at the very end if no specific scenario (code/think/etc) matched.
-  if (incomingModel.includes(",")) {
-    const [provider, modelName] = incomingModel.split(",");
-    const finalProvider = providers.find(
-      (p: any) => p.name.toLowerCase() === provider
-    );
-    const finalModel = finalProvider?.models?.find(
-      (m: any) => m.toLowerCase() === modelName
-    );
-    if (finalProvider && finalModel) {
-      return { model: `${finalProvider.name},${finalModel}`, scenarioType: 'default' };
-    }
-    return { model: incomingModel, scenarioType: 'default' };
-  }
-
+  // Default fallback: any plain Claude model name (no comma) that didn't match a scenario above.
   return { model: Router?.default, scenarioType: 'default' };
 };
 
@@ -251,12 +240,13 @@ export interface RouterFallbackConfig {
 
 export const router = async (req: any, _res: any, context: RouterContext) => {
   const { configService, event } = context;
-  // Parse sessionId from metadata.user_id
+  // Extract sessionId from metadata.user_id (e.g., "user_session_abc123")
   if (req.body.metadata?.user_id) {
-    const parts = req.body.metadata.user_id.split("_session_");
-    if (parts.length > 1) {
-      req.sessionId = parts[1];
-    }
+    const userId = req.body.metadata.user_id;
+    const parts = userId.split("_session_");
+    req.sessionId = parts.length > 1 ? parts[1] : userId;
+  } else {
+    req.sessionId = "default-session";
   }
   const lastMessageUsage = sessionUsageCache.get(req.sessionId);
   const { messages, system = [], tools }: MessageCreateParamsBase = req.body;
@@ -324,14 +314,12 @@ export const router = async (req: any, _res: any, context: RouterContext) => {
     req.body.model = model;
 
     // Log router event for observability
-    if (req.sessionId) {
-      logRouterEvent({
-        sessionId: req.sessionId,
-        timestamp: Date.now(),
-        taskType: req.scenarioType || 'default',
-        model: model
-      }).catch(() => {}); // Fire-and-forget, never block the request
-    }
+    logRouterEvent({
+      sessionId: req.sessionId,
+      timestamp: Date.now(),
+      taskType: req.scenarioType || 'default',
+      model: model
+    }).catch(() => {}); // Fire-and-forget, never block the request
   } catch (error: any) {
     req.log.error(`Error in router middleware: ${error.message}`);
     const Router = configService.get("Router");
