@@ -146,6 +146,11 @@ function displayCurrentConfig(config: Config): void {
     console.log(`  ${formatModel(config.Router.image)}\n`);
   }
   
+  if (config.Router.code) {
+    console.log(`${BOLDCYAN}Code Model:${RESET}`);
+    console.log(`  ${formatModel(config.Router.code)}\n`);
+  }
+  
   console.log(`\n${BOLDCYAN}═══════════════════════════════════════════════${RESET}`);
   console.log(`${BOLDCYAN}           Add/Update Model${RESET}`);
   console.log(`${BOLDCYAN}═══════════════════════════════════════════════${RESET}\n`);
@@ -161,6 +166,7 @@ async function selectModelType() {
       { name: 'Long Context Model', value: 'longContext' },
       { name: 'Web Search Model', value: 'webSearch' },
       { name: 'Image Model', value: 'image' },
+      { name: 'Code Model', value: 'code' },
       { name: `${BOLDGREEN}+ Add New Model${RESET}`, value: 'addModel' }
     ]
   });
@@ -171,8 +177,11 @@ async function selectModel(config: Config, modelType: string) {
   
   return await select({
     message: `\n${BOLDYELLOW}Select a model for ${modelType}:${RESET}`,
-    choices: models,
-    pageSize: 15
+    choices: [
+      { name: `${DIM}← Back${RESET}`, value: '__back__' },
+      ...models
+    ],
+    pageSize: 16
   });
 }
 
@@ -314,7 +323,8 @@ async function addModelToExistingProvider(config: Config, providerName: string):
         { name: 'Think Model', value: 'think' },
         { name: 'Long Context Model', value: 'longContext' },
         { name: 'Web Search Model', value: 'webSearch' },
-        { name: 'Image Model', value: 'image' }
+        { name: 'Image Model', value: 'image' },
+        { name: 'Code Model', value: 'code' }
       ]
     }) as string;
     
@@ -432,29 +442,42 @@ export async function runModelSelector(): Promise<void> {
   console.clear();
   
   try {
-    let config = loadConfig();
-    displayCurrentConfig(config);
-    
-    const action = await selectModelType() as string;
-    
-    if (action === 'addModel') {
-      const result = await addNewModel(config);
+    while (true) {
+      let config = loadConfig();
+      displayCurrentConfig(config);
       
-      if (result) {
-        config = loadConfig();
-        config.Router[result.modelType] = `${result.providerName},${result.modelName}`;
+      const action = await selectModelType() as string;
+      
+      if (action === 'addModel') {
+        const result = await addNewModel(config);
+        
+        if (result) {
+          config = loadConfig();
+          config.Router[result.modelType] = `${result.providerName},${result.modelName}`;
+          saveConfig(config);
+          console.log(`${GREEN}✓ ${result.modelType} set to ${result.providerName},${result.modelName}${RESET}`);
+          displayCurrentConfig(loadConfig());
+          break;
+        }
+        // result was null (user cancelled inside addModel) → loop back to main menu
+        console.clear();
+        continue;
+      } else {
+        const selectedModel = await selectModel(config, action) as string;
+        
+        if (selectedModel === '__back__') {
+          // User chose Back → redraw main menu
+          console.clear();
+          continue;
+        }
+        
+        config.Router[action] = selectedModel;
         saveConfig(config);
-        console.log(`${GREEN}✓ ${result.modelType} set to ${result.providerName},${result.modelName}${RESET}`);
+        console.log(`${GREEN}✓ ${action} model updated to: ${selectedModel}${RESET}`);
+        displayCurrentConfig(loadConfig());
+        break;
       }
-    } else {
-      const selectedModel = await selectModel(config, action) as string;
-      config.Router[action] = selectedModel;
-      saveConfig(config);
-      
-      console.log(`${GREEN}✓ ${action} model updated to: ${selectedModel}${RESET}`);
     }
-    
-    displayCurrentConfig(config);
   } catch (error: any) {
     console.error(`${YELLOW}Error:${RESET}`, error.message);
     process.exit(1);

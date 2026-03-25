@@ -333,7 +333,7 @@ const FULL_THEME: StatusLineThemeConfig = {
         },
         {
             type: "gitBranch",
-            icon: "",
+            icon: "",
             text: "{{gitBranch}}",
             color: "bright_magenta"
         },
@@ -372,6 +372,24 @@ const FULL_THEME: StatusLineThemeConfig = {
             icon: "📝",
             text: "+{{linesAdded}}/-{{linesRemoved}}",
             color: "bright_cyan"
+        },
+        {
+            type: "models",
+            icon: "🧠",
+            text: "{{modelsUsed}}",
+            color: "bright_cyan"
+        },
+        {
+            type: "taskModels",
+            icon: "⚙️",
+            text: "{{taskModels}}",
+            color: "bright_magenta"
+        },
+        {
+            type: "modelBreakdown",
+            icon: "📊",
+            text: "{{modelBreakdown}}",
+            color: "bright_yellow"
         }
     ]
 };
@@ -479,6 +497,42 @@ async function getTokenSpeedStats(sessionId: string): Promise<{
         // Silently fail on error
         return null;
     }
+}
+
+// Read router logs for this session to get accurate model usage data
+async function getRouterLogs(sessionId: string): Promise<{
+    modelsUsed: Set<string>;
+    modelUsageCount: Record<string, number>;
+    taskModelMap: Record<string, Set<string>>;
+}> {
+    const result = {
+        modelsUsed: new Set<string>(),
+        modelUsageCount: {} as Record<string, number>,
+        taskModelMap: {
+            code: new Set<string>(),
+            think: new Set<string>(),
+            webSearch: new Set<string>(),
+            longContext: new Set<string>(),
+            background: new Set<string>(),
+            default: new Set<string>()
+        } as Record<string, Set<string>>
+    };
+
+    try {
+        const file = path.join(tmpdir(), "ccr-router-logs", `session-${sessionId}.json`);
+        const content = await fs.readFile(file, "utf-8");
+        const logs = JSON.parse(content);
+
+        for (const entry of logs) {
+            const { model, taskType } = entry;
+            result.modelsUsed.add(model);
+            result.modelUsageCount[model] = (result.modelUsageCount[model] || 0) + 1;
+            const type = result.taskModelMap[taskType] ? taskType : "default";
+            result.taskModelMap[type].add(model);
+        }
+    } catch {}
+
+    return result;
 }
 
 // Read theme configuration from user home directory
@@ -746,6 +800,23 @@ export async function parseStatusLineData(input: StatusLineInput, presetName?: s
         const linesAdded = input.cost?.total_lines_added || 0;
         const linesRemoved = input.cost?.total_lines_removed || 0;
 
+        // Get router observability data
+        const routerData = await getRouterLogs(input.session_id);
+
+        const modelsUsedString = Array.from(routerData.modelsUsed).join(" | ") || model;
+
+        const modelBreakdownString = Object.entries(routerData.modelUsageCount)
+            .map(([m, c]) => `${m}:${c}`)
+            .join(" ");
+
+        const taskModelString = Object.entries(routerData.taskModelMap)
+            .map(([task, models]) => {
+                if (models.size === 0) return null;
+                return `${task}:${Array.from(models).join(",")}`;
+            })
+            .filter(Boolean)
+            .join(" | ");
+
         // Define variable replacement mapping
         const variables: Record<string, string> = {
             workDirName,
@@ -767,7 +838,10 @@ export async function parseStatusLineData(input: StatusLineInput, presetName?: s
             linesRemoved: linesRemoved.toString(),
             netLines: (linesAdded - linesRemoved).toString(),
             version: input.version || '',
-            sessionId: input.session_id.substring(0, 8)
+            sessionId: input.session_id.substring(0, 8),
+            modelsUsed: modelsUsedString,
+            modelBreakdown: modelBreakdownString,
+            taskModels: taskModelString
         };
 
         // Determine the style to use

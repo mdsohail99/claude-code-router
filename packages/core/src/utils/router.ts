@@ -7,6 +7,7 @@ import { CLAUDE_PROJECTS_DIR, HOME_DIR } from "@CCR/shared";
 import { LRUCache } from "lru-cache";
 import { ConfigService } from "../services/config";
 import { TokenizerService } from "../services/tokenizer";
+import { logRouterEvent } from "./router-logger";
 
 // Types from @anthropic-ai/sdk
 interface Tool {
@@ -131,19 +132,6 @@ const getUseModel = async (
   const providers = configService.get<any[]>("providers") || [];
   const Router = projectSpecificRouter || configService.get("Router");
 
-  if (req.body.model.includes(",")) {
-    const [provider, model] = req.body.model.split(",");
-    const finalProvider = providers.find(
-      (p: any) => p.name.toLowerCase() === provider
-    );
-    const finalModel = finalProvider?.models?.find(
-      (m: any) => m.toLowerCase() === model
-    );
-    if (finalProvider && finalModel) {
-      return { model: `${finalProvider.name},${finalModel}`, scenarioType: 'default' };
-    }
-    return { model: req.body.model, scenarioType: 'default' };
-  }
 
   // if tokenCount is greater than the configured threshold, use the long context model
   const longContextThreshold = Router?.longContextThreshold || 60000;
@@ -196,6 +184,51 @@ const getUseModel = async (
     req.log.info(`Using think model for ${req.body.thinking}`);
     return { model: Router.think, scenarioType: 'think' };
   }
+  // Detect coding intent from recent tool usage in message history
+  const CODING_TOOLS = new Set([
+    'edit_file', 'write_to_file', 'create_file',
+    'replace_file_content', 'multi_replace_file_content',
+    'read_file', 'list_files', 'list_dir', 'find_by_name',
+    'grep_search', 'codebase_search',
+    'run_command', 'execute_command'
+  ]);
+  if (Router?.code) {
+    const hasCodingToolUsage = Array.isArray(req.body.messages) &&
+      req.body.messages.some((msg: any) =>
+        msg.role === 'assistant' &&
+        Array.isArray(msg.content) &&
+        msg.content.some((block: any) =>
+          block.type === 'tool_use' && CODING_TOOLS.has(block.name)
+        )
+      );
+    if (hasCodingToolUsage) {
+      req.log.info(`Using code model due to coding tool usage in conversation`);
+      return { model: Router.code, scenarioType: 'code' };
+    }
+  }
+  const incomingModel = req.body.model || '';
+  // If the model is a generic Claude 3.5/3.7 Sonnet, use the Router default.
+  // This allows CCR to handle the "intelligent" mapping for the standard Claude Code experience.
+  if (!incomingModel || incomingModel === 'claude-3-5-sonnet-20241022' || incomingModel === 'claude-3-7-sonnet-20250219') {
+    return { model: Router?.default, scenarioType: 'default' };
+  }
+
+  // If the model contains a comma (like "openrouter,model-name"), it's a manual override.
+  // We let these pass through at the very end if no specific scenario (code/think/etc) matched.
+  if (incomingModel.includes(",")) {
+    const [provider, modelName] = incomingModel.split(",");
+    const finalProvider = providers.find(
+      (p: any) => p.name.toLowerCase() === provider
+    );
+    const finalModel = finalProvider?.models?.find(
+      (m: any) => m.toLowerCase() === modelName
+    );
+    if (finalProvider && finalModel) {
+      return { model: `${finalProvider.name},${finalModel}`, scenarioType: 'default' };
+    }
+    return { model: incomingModel, scenarioType: 'default' };
+  }
+
   return { model: Router?.default, scenarioType: 'default' };
 };
 
@@ -205,7 +238,7 @@ export interface RouterContext {
   event?: any;
 }
 
-export type RouterScenarioType = 'default' | 'background' | 'think' | 'longContext' | 'webSearch';
+export type RouterScenarioType = 'default' | 'background' | 'think' | 'longContext' | 'webSearch' | 'code';
 
 export interface RouterFallbackConfig {
   default?: string[];
@@ -213,6 +246,7 @@ export interface RouterFallbackConfig {
   think?: string[];
   longContext?: string[];
   webSearch?: string[];
+  code?: string[];
 }
 
 export const router = async (req: any, _res: any, context: RouterContext) => {
@@ -288,6 +322,16 @@ export const router = async (req: any, _res: any, context: RouterContext) => {
       req.scenarioType = 'default';
     }
     req.body.model = model;
+
+    // Log router event for observability
+    if (req.sessionId) {
+      logRouterEvent({
+        sessionId: req.sessionId,
+        timestamp: Date.now(),
+        taskType: req.scenarioType || 'default',
+        model: model
+      }).catch(() => {}); // Fire-and-forget, never block the request
+    }
   } catch (error: any) {
     req.log.error(`Error in router middleware: ${error.message}`);
     const Router = configService.get("Router");
